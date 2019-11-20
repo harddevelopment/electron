@@ -1,0 +1,207 @@
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css">
+<script type="text/javascript">
+//window.$ = window.jquery = require('../node_modules/jquery');
+window.$ = window.jquery = require('jquery');
+//window.dt = require('../node_modules/datatables.net')();
+window.dt = require('datatables.net')();
+var net = require('net');
+
+$(document).ready(function() {
+    var table = $('#example').DataTable({
+        "pagingType": "full_numbers",
+        buttons: ['copy', 'excel', 'pdf', 'colvis'],
+        select: false,
+        "pageLength": 5
+        //buttons: [ 'copy', 'excel', 'colvis' ],
+    });
+});
+
+
+$('#example tbody').on('click', 'td', function() {
+    console.log($(this).parent());
+    var t = $('#example').DataTable();
+    t.row($(this).parents('tr')).remove().draw(false)
+});
+
+function logEvent(message) {
+    var PIPE_PATH = "\\\\.\\pipe\\LoggerPipe";
+    var stream = net.connect(PIPE_PATH);
+    stream.on('error', (error) => {
+        console.log('ignore this:') //??
+        console.log(error)
+    })
+    stream.write("0" + message);
+    stream.push();
+    stream.end();
+}
+
+function updateTable() {
+    if (document.getElementById('defaultGroupExample1').checked == true) {
+        var value = document.getElementById('newElementInput').files[0].path;
+        var type = 'File';
+    } else if (document.getElementById('defaultGroupExample2').checked == true) {
+        var value = document.getElementById('newElementInput').files[0].path;
+        var type = 'Folder';
+    } else if (document.getElementById('defaultGroupExample3').checked == true) {
+        var value = document.getElementById('RegistryInput').value;
+        var type = 'Registry';
+    }
+    var t = $('#example').DataTable();
+    t.row.add([value, type, 'Block']).draw(false);
+}
+
+
+function sendBlockTableToWorker() {
+    var PIPE_PATH = "\\\\.\\pipe\\GUIpipe";
+
+    var t = $('#example').DataTable();
+    var files = '';
+    var folders = '';
+    var registry = '';
+    for (var i = t.columns().data()[0].length - 1; i >= 0; i--) {
+        if (t.columns().data()[1][i] == 'File' || t.columns().data()[1][i] == 'Folder') {
+            files += t.columns().data()[0][i] + '|'
+        } else if (t.columns().data()[1][i] == 'Registry') {
+            var val = t.columns().data()[0][i];
+            val = val.replace("HKEY_CURRENT_USER", "USER");
+            val = val.replace("HKEY_LOCAL_MACHINE", "MACHINE");
+            val = val.replace("CurrentControlSet", "ControlSet001");
+            registry += '\\REGISTRY\\' + val + '|'
+        }
+    }
+    console.log(files)
+    var stream = net.connect(PIPE_PATH);
+    stream.write("01" + registry + '\n');
+    stream.push();
+    stream.end();
+
+    var stream = net.connect(PIPE_PATH);
+    stream.write("03" + files + '\n');
+    stream.push();
+    stream.end();
+
+    var regedit = require('regedit')
+    regedit.putValue({
+        'HKLM\\SYSTEM\\CurrentControlSet\\Services\\SupaFilter': {
+            'ProtectedFiles': {
+                value: files,
+                type: 'REG_SZ'
+            },
+            'ProtectedRegistry': {
+                value: registry,
+                type: 'REG_SZ'
+            }
+        }
+    }, function(err) {
+        console.log(err)
+    })
+    if (files.length > 0) {
+        logEvent('a')
+    }
+    if (registry.length > 0) {
+        logEvent('b')
+    }
+
+}
+</script>
+<style type="text/css">
+#example {
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+}
+
+.radio-inline {
+    padding: 8px;
+    /* Поля вокруг текста */
+}
+</style>
+<div class="row" style="width: 100%">
+    <table class='table' style="margin: 10px">
+        <tr>
+            <th style="width: 45%">
+                <div class="custom-control custom-radio">
+                    <input type="radio" class="custom-control-input" id="defaultGroupExample1" name="groupOfDefaultRadios" checked>
+                    <label class="custom-control-label" for="defaultGroupExample1">File</label>
+                </div>
+                <div class="custom-control custom-radio">
+                    <input type="radio" class="custom-control-input" id="defaultGroupExample2" name="groupOfDefaultRadios">
+                    <label class="custom-control-label" for="defaultGroupExample2">Folder</label>
+                </div>
+                <div class="custom-control custom-radio">
+                    <input type="radio" class="custom-control-input" id="defaultGroupExample3" name="groupOfDefaultRadios">
+                    <label class="custom-control-label" for="defaultGroupExample3">Registry</label>
+                </div>
+            </th>
+            <th style="width: 45%">
+                <div class="custom-file" id="FileDirectoryInput">
+                    <input type="file" class="custom-file-input" id="newElementInput">
+                    <label class="custom-file-label" for="customFile">Browse</label>
+                </div>
+                <input type="registry" class="form-control" id="RegistryInput" placeholder="Enter registry key" hidden>
+                <div class="text-right">
+                    <input class="btn btn-primary" type="submit" value="Add" style="margin: 3px" onclick="updateTable()">
+                </div>
+            </th>
+            </td>
+        </tr>
+    </table>
+</div>
+<script type="text/javascript">
+$(document).on('change', 'input:radio', function(event) {
+    var registry = document.getElementById("RegistryInput");
+    var filefolder = document.getElementById("FileDirectoryInput");
+    var el = document.getElementById("newElementInput");
+
+    if ($(this)[0].labels[0].innerText == "File") {
+        el.removeAttribute("webkitdirectory");
+        registry.setAttribute("hidden", true);
+        filefolder.removeAttribute("hidden");
+    } else if ($(this)[0].labels[0].innerText == "Folder") {
+        registry.setAttribute("hidden", true);
+        filefolder.removeAttribute("hidden");
+        el.setAttribute("webkitdirectory", true);
+    } else {
+        registry.removeAttribute("hidden");
+        filefolder.setAttribute("hidden", true);
+    }
+
+});
+</script>
+<style type="text/css">
+.dataTables_wrapper {
+    width: 93%;
+    margin: 20px;
+}
+
+th,
+td {
+    white-space: nowrap;
+}
+</style>
+<table id="example" class="table compact table-bordered">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Access</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>path1</td>
+            <td>Folder</td>
+            <td>Block</td>
+        </tr>
+        <tr>
+            <td>path2</td>
+            <td>Folder</td>
+            <td>Block</td>
+        </tr>
+    </tbody>
+</table>
+<div class="text-right" style="margin-right: 40px">
+    <input class="btn btn-primary" type="submit" value="Save" onclick="sendBlockTableToWorker()">
+</div>

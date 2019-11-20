@@ -1,0 +1,75 @@
+<div class="custom-control custom-switch" style="margin: 20px">
+    <input type="checkbox" class="custom-control-input" id="networkSwitch" checked onclick="switchNetworkFilter(this)">
+    <label class="custom-control-label" for="networkSwitch">Network packet filter</label>
+</div>
+<div class="custom-control custom-switch" style="margin: 20px">
+    <input type="checkbox" class="custom-control-input" id="fileSwitch" checked onclick="switchFileFilter(this)">
+    <label class="custom-control-label" for="fileSwitch">File filter</label>
+</div>
+<div class="custom-control custom-switch" style="margin: 20px">
+    <input type="checkbox" class="custom-control-input" id="registrySwitch" checked onclick="switchRegistryFilter(this)">
+    <label class="custom-control-label" for="registrySwitch">Registry filter</label>
+</div>
+<script type="text/javascript">
+window.$ = window.jquery = require('../node_modules/jquery');
+const { ipcRenderer } = require('electron');
+
+var fStatus = 1;
+var rStatus = 1;
+var nStatus = 1;
+
+function logEvent(message) {
+    var PIPE_PATH = "\\\\.\\pipe\\LoggerPipe";
+    var stream = net.connect(PIPE_PATH);
+    stream.on('error', (error) => {
+        console.log('ignore this:') //??
+        console.log(error)
+    })
+    stream.write(message);
+    stream.push();
+    stream.end();
+}
+
+function switchFileFilter(element) {
+    var PIPE_PATH = "\\\\.\\pipe\\GUIpipe";
+    fStatus = element.checked ? 1 : 0;
+    var msg = "04" + 'file' + fStatus.toString() + '\n'
+    var stream = net.connect(PIPE_PATH);
+    stream.write(msg);
+    stream.push();
+    stream.end();
+    updateTrayLabels();
+    logEvent('0' + fStatus + 'File Filter')
+}
+
+function switchRegistryFilter(element) {
+    var PIPE_PATH = "\\\\.\\pipe\\GUIpipe";
+    rStatus = element.checked ? 1 : 0;
+    var msg = "05" + 'registry' + rStatus.toString() + '\n'
+    var stream = net.connect(PIPE_PATH);
+    stream.write(msg);
+    stream.push();
+    stream.end();
+    updateTrayLabels();
+    logEvent('0' + rStatus + 'Registry Filter')
+}
+
+function switchNetworkFilter(element) {
+    var PIPE_PATH = "\\\\.\\pipe\\GUIpipe";
+    nStatus = element.checked ? 1 : 0;
+    var msg = "06" + 'network' + nStatus.toString() + '\n'
+    var stream = net.connect(PIPE_PATH);
+    stream.write(msg);
+    stream.push();
+    stream.end();
+    updateTrayLabels();
+    logEvent('1' + nStatus + 'Network Filter')
+}
+
+function updateTrayLabels() {
+    var f = fStatus == 1 ? "Enable" : "Disable";
+    var r = rStatus == 1 ? "Enable" : "Disable";
+    var n = nStatus == 1 ? "Enable" : "Disable";
+    ipcRenderer.send('updateTrayLabels', f, r, n)
+}
+</script>

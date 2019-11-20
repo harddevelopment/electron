@@ -1,0 +1,129 @@
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+        window.$ = window.jQuery = require('jquery');
+    </script>
+    <!-- <link rel="stylesheet" href="css/bootstrap.min.css"> -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js"></script>
+    <style type="text/css">
+    .nav-tabs,
+    .navbar-nav {
+        font-size: 20px;
+    }
+    </style>
+    <script type="text/javascript">
+    let fs = require('fs');
+    let sqlite3 = require('sqlite3').verbose();
+    $(function() {
+        $("#includeProfile").load("profile.html");
+        $("#includeFilesystemTable").load("filesystem.html");
+        $("#includeNetworkTable").load("network.html");
+        $("#includeLogsTable").load("logs.html");
+        $("#includeCuckooTable").load("cuckoo.html");
+    });
+    </script>
+    <script type="text/javascript">
+    var net = require('net');
+    var iconv = require('iconv-lite');
+    var PIPE_PATH = "\\\\.\\pipe\\GUIpipe02";
+    var prevFile = ""
+    var prevTime = Date.now()
+
+    const remote = require('electron').remote;
+    var mainWindow = remote.getCurrentWindow();
+
+    var server = net.createServer(function(stream) {
+        stream.on('data', function(c) {
+            var file = iconv.encode(iconv.decode(c, "cp1251"), "utf8").toString();
+            if (Date.now() < prevTime + 5 * 1000 && prevFile != "" && file.includes(prevFile)) {
+                return;
+            } else {
+
+                let securiteAlert = new Notification('SECURITY WARNING', {
+                    body: 'Access denied: ' + file
+                })
+
+                securiteAlert.onclick = () => {
+                    mainWindow.show();
+                }
+                prevFile = file;
+                prevTime = Date.now()
+            }
+        });
+        stream.on('end', function() {
+            server.close();
+        });
+    });
+
+    server.listen(PIPE_PATH);
+
+    // var stream = net.connect(PIPE_PATH);
+    // stream.write('hello');
+    // stream.end();
+
+
+    // server.close();
+    </script>
+</head>
+
+<body>
+    <div id="navbarNavDropdown" class="navbar">
+        <ul class="nav nav-tabs" role="tablist">
+            <a class="navbar-brand" href="index.html">
+                <img src="../icon.png" width="30" height="30" class="d-inline-block align-top" alt="">
+                Antivairus
+            </a>
+            <li class="nav-item">
+                <a class="nav-link  active" href="#profile" role="tab" data-toggle="tab" aria-selected="true">Profile</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#filesystem" role="tab" data-toggle="tab">File System</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#network" role="tab" data-toggle="tab">Network</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#cuckoo" role="tab" data-toggle="tab">Cuckoo</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#logs" role="tab" data-toggle="tab">Logs</a>
+            </li>
+        </ul>
+        <ul class="navbar-nav text-right">
+            <li class="nav-item">
+                <a class="nav-link" onclick="
+                    const remote = require('electron').remote
+                    let w = remote.getCurrentWindow()
+                    w.close()">
+                    Exit
+                </a>
+            </li>
+        </ul>
+    </div>
+    <div class="tab-content">
+        <div role="tabpanel" class="tab-pane active" id="profile">
+            <div id="includeProfile"></div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="filesystem">
+            <div id="includeFilesystemTable"></div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="network">
+            <div id="includeNetworkTable"></div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="cuckoo">
+            <div id="includeCuckooTable"></div>
+        </div>
+        <div role="tabpanel" class="tab-pane fade" id="logs">
+            <div id="includeLogsTable"></div>
+        </div>
+    </div>
+</body>
+
+</html>

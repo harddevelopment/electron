@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+        window.$ = window.jQuery = require('jquery');
+		let sqlite3 = require('sqlite3').verbose();
+		let fs = require('fs')
+		let https = require('https');
+		const { dialog } = require('electron').remote;
+	</script>
+    <!-- <link rel="stylesheet" href="css/bootstrap.min.css"> -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js"></script>
+</head>
+
+<body>
+    <table id="dt4" class="table table-sm" style="margin: 20px">
+        <tbody>
+            <tr>
+                <th scope="row">ID</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Filename</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">md5</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Status</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Time</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Digital Sign</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Signatures</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Packers</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">Cuckoo</th>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">View Report</th>
+                <td>
+                    <input class="btn btn-link" type="submit" value="View" style="padding: 0px" onclick="viewReport(this)">
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Download Report</th>
+                <td>
+                    <input class="btn btn-link" type="submit" value="Download" style="padding: 0px" onclick="downloadReport(this)">
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <script type="text/javascript">
+    var token = "nGJGF-sh2nr8r-wXOEpkwA"
+    var ip = "192.168.44.141"
+    var options = {
+        host: ip,
+        port: 443,
+        path: '/tasks/list',
+        method: 'GET',
+        headers: {
+            'Authorization': 'Bearer ' + token
+        }
+    };
+
+    var url = new URL(window.location);
+    var md5 = url.searchParams.get("md5");
+    console.log(md5)
+    var dbFiles = new sqlite3.Database("files.db", sqlite3.OPEN_READWRITE, (err) => {
+        console.log(err)
+    });
+    dbFiles.get("SELECT * FROM files WHERE hash = ?", md5, (err, row) => {
+        if (err) {
+            console.log(err)
+        } else {
+            var table = document.getElementById("dt4");
+            table.rows[0].cells[1].innerHTML = row['id']
+            table.rows[1].cells[1].innerHTML = row['name']
+            table.rows[2].cells[1].innerHTML = row['hash']
+            table.rows[3].cells[1].innerHTML = row['status']
+            table.rows[4].cells[1].innerHTML = row['time']
+            table.rows[5].cells[1].innerHTML = row['verify']
+            table.rows[6].cells[1].innerHTML = row['signature']
+            table.rows[7].cells[1].innerHTML = row['packers']
+            table.rows[8].cells[1].innerHTML = row['cuckoo']
+        }
+    });
+
+    function viewReport(element) {
+        var id = element.parentNode.parentNode.parentNode.rows[0].cells[1].innerHTML;
+        var name = element.parentNode.parentNode.parentNode.rows[1].cells[1].innerHTML;
+
+        const remote = require('electron').remote;
+        const BrowserWindow = remote.BrowserWindow;
+        const win = new BrowserWindow({
+            height: 600,
+            width: 800,
+            title: "Cuckoo report #" + id
+        });
+        win.loadURL('https://' + ip + '/tasks/report/' + id, { extraHeaders: 'Authorization: Bearer ' + token });
+    	logEvent('3' + 'Filename: ' + name)
+    }
+
+    function downloadReport(element) {
+        var downloadDir = process.env.USERPROFILE + "\\Downloads\\cuckooReports\\"
+        if (!fs.existsSync(downloadDir)) {
+            fs.mkdirSync(downloadDir);
+        }
+        var id = element.parentNode.parentNode.parentNode.rows[0].cells[1].innerHTML;
+        var name = element.parentNode.parentNode.parentNode.rows[1].cells[1].innerHTML;
+        var filepath = downloadDir + "report" + id + '.json'
+        var file = fs.createWriteStream(filepath);
+        options.path = '/tasks/report/' + id;
+
+        var request = https.get(options, function(response) {
+            response.pipe(file);
+            file.on('finish', function() {
+                file.close();
+				const dialogOptions = { type: 'info', buttons: ['OK'], message: "Report downloaded!\n"+filepath, title: 'Cuckoo' };
+                dialog.showMessageBox(dialogOptions, i => console.log(i))
+            });
+        }).on('error', function(err) {
+            fs.unlink(dest);
+        });
+    	logEvent('4' + 'Filename: ' + name)
+    }
+    </script>
+</body>
+
+</html>

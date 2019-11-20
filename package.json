@@ -1,0 +1,42 @@
+{
+  "name": "electron-quick-start",
+  "version": "1.0.0",
+  "description": "A minimal Electron application",
+  "main": "main.js",
+  "scripts": {
+    "postinstall": "install-app-deps",
+    "start": "electron .",
+    "build": "electron-packager . antivairus --platform=win32 --arch=x64 --electron-version=6.0.12 --app-version=0.1.0 --out=dist --ignore=dist --prune"
+  },
+  "repository": "https://github.com/electron/electron-quick-start",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "author": "GitHub",
+  "license": "CC0-1.0",
+  "devDependencies": {
+    "bootstrap": "^4.3.1",
+    "datatables.net": "^1.10.20",
+    "datatables.net-dt": "^1.10.20",
+    "electron": "^6.0.12",
+    "electron-builder": "^22.1.0",
+    "electron-packager": "^14.1.0",
+    "electron-rebuild": "^1.8.6",
+    "jquery": "^3.3.1",
+    "popper.js": "^1.14.7"
+  },
+  "dependencies": {
+    "datatables.net": "^1.10.20",
+    "datatables.net-dt": "^1.10.20",
+    "iconv-lite": "^0.5.0",
+    "jquery": "^3.3.1",
+    "md5-file": "^4.0.0",
+    "regedit": "^3.0.3",
+    "request": "^2.88.0",
+    "sqlite3": "^4.1.0"
+  }
+}

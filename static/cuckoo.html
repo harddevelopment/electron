@@ -1,0 +1,332 @@
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css">
+<style type="text/css">
+#dt3 {
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+}
+</style>
+<script type="text/javascript">
+const md5File = require('md5-file')
+const execSync = require('child_process').execSync;
+
+const dbName = 'files.db';
+var dbFiles = '';
+let dt3 = $('#dt3').DataTable({
+    "createdRow": function(row, data, dataIndex) {
+        var status = $(row)[0].cells[1].innerHTML;
+        if (status == "Clean") {
+            $(row).css('background-color', "#ABEBC6");
+        } else if (status == "Malware") {
+            $(row)[0].css('background-color', "#D98880");
+        } else {
+            $(row).css('background-color', "#e1e7fe");
+        }
+    }
+});
+
+
+var btnView = "<input class=\"btn btn-link\" type=\"submit\" value=\"View\" onclick=\"viewReport(this)\">"
+var btnDownload = "<input class=\"btn btn-link\" type=\"submit\" value=\"Download\" onclick=\"downloadReport(this)\">"
+var btnCheck = "<input id=\"statusBtn\" class=\"btn btn-link\" type=\"submit\" value=\"Check\" onclick=\"checkStatus(this)\">"
+var btnDetails = "<input id=\"detailsBtn\" class=\"btn btn-link\" type=\"submit\" value=\"Details\" onclick=\"details(this)\">"
+
+connectToDB();
+
+function connectToDB() {
+    if (fs.existsSync(dbName)) {
+        dbFiles = new sqlite3.Database(dbName, sqlite3.OPEN_READWRITE, (err) => {
+            console.log(err)
+        });
+    } else {
+        dbFiles = new sqlite3.Database(dbName, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err, rows) => {
+            if (err) {
+                console.log(err)
+            } else {
+                dbFiles.run('CREATE TABLE files(hash, id, name, status, time, path, verify, signature, packer, cuckoo)');
+            }
+        });
+    }
+}
+
+function verifySignature(path) {
+    var digSign = false;
+    var out = execSync('SignatureVerification.exe ' + path).toString()
+    if (out.search('is signed and the signature was verified.') != -1) {
+        digSign = true;
+    }
+    return digSign.toString();
+}
+
+function checkPacker(path) {
+    return execSync('python checkPacker.py ' + 'Dbgview.exe').toString();
+}
+
+function logEvent(message) {
+    var PIPE_PATH = "\\\\.\\pipe\\LoggerPipe";
+    var stream = net.connect(PIPE_PATH);
+    stream.on('error', (error) => {
+        console.log('ignore this:') //??
+        console.log(error)
+    })
+    stream.write("2" + message);
+    stream.push();
+    stream.end();
+}
+
+var token = "nGJGF-sh2nr8r-wXOEpkwA"
+var ip = "192.168.44.141"
+
+var request = require('request');
+var https = require('https');
+var http = require('http');
+
+window.$ = window.jquery = require('jquery');
+//window.$ = window.jquery = require('../node_modules/jquery');
+//window.dt = require('../node_modules/datatables.net')();
+window.dt = require('datatables.net')();
+
+function showMessage(title, msg) {
+    const { dialog } = require('electron').remote
+    const dialogOptions = { type: 'info', buttons: ['OK'], message: msg, title: 'Cuckoo' }
+    dialog.showMessageBox(dialogOptions, i => console.log(i))
+}
+
+function checkFile() {
+    var filepath = document.getElementById('newElementInput3').files[0].path;
+    var filename = filepath.split('\\').slice(-1)[0];
+
+    var q = {}
+    q['md5'] = md5File.sync(filepath);
+
+    dbFiles.get("SELECT * FROM files WHERE hash = ?", q['md5'], (err, row) => {
+        if (row != null) {
+            showMessage('Cuckoo', 'File already checked');
+            return;
+        } else {
+            request.post({
+                url: 'https://' + ip + '/tasks/create/file',
+                formData: {
+                    'file': fs.createReadStream(filepath),
+                },
+                headers: { "Authorization": "Bearer " + token },
+            }, function(err, httpResponse, body) {
+                if (err) {
+                    showMessage('Cuckoo', 'Error, fix me');
+                } else {
+                    q['id'] = httpResponse.body.match(/\d+/)[0]
+                    showMessage('Cuckoo', 'File uploaded');
+                    logEvent('2' + q['id'])
+                    q['name'] = filename;
+                    q['status'] = 'Unknown';
+                    q['time'] = new Date().toLocaleString();
+                    q['filepath'] = filepath;
+                    q['digSign'] = verifySignature(filepath);
+                    q['signature'] = 'null';
+                    q['packers'] = checkPacker(filepath)
+                    q['cuckoo'] = 'null';
+
+                    var arr = Object.values(q);
+                    var sql = 'INSERT INTO files(hash, id, name, status, time, path, verify, signature, packer, cuckoo) VALUES (?,?,?,?,?,?,?,?,?,?)';
+                    dbFiles.run(sql, arr, function(err) {
+                        if (err) {
+                            return console.log("dbFiles insert error", err.message);
+                        }
+                    });
+                    dt3.row.add([q['name'], q['status'], q['time'], q['hash'], btnDetails]).draw(false);
+
+                    //dt3.row.add([q['id'], q['status'], q['time'], q['name'], q['md5'], q['packers'], q['digSign'], q['signature'], q['cuckoo'], btnView]).draw(false);
+
+                    sendCuckoo(q['id'], q['md5'], q['name'])
+                }
+            });
+        }
+    })
+
+    logEvent('7' + 'Filename: ' + filename)
+}
+</script>
+<div style="width: 90%; margin: 10px">
+    <div class="custom-file" id="customFile" lang="es">
+        <input type="file" class="custom-file-input" id="newElementInput3" aria-describedby="fileHelp">
+        <label class="custom-file-label" for="exampleInputFile">
+            Choose File
+        </label>
+    </div>
+    <div class="text-right" style="margin-top: 20px">
+        <input class="btn btn-primary" type="submit" value="Check" onclick="checkFile()">
+    </div>
+</div>
+<table id="dt3" class="table compact table-bordered">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Time</th>
+            <th>MD5</th>
+            <th>Details</th>
+            <!--  <th>ID</th>
+            <th>Status</th>
+            <th>Added on</th>
+            <th>Name</th>
+            <th>MD5</th>
+            <th>Packer</th>
+            <th>Sign</th>
+            <th>Signatures</th>
+            <th>Cuckoo</th>
+            <th></th> -->
+            <!-- <th></th> -->
+        </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+<script type="text/javascript">
+var options = {
+    host: ip,
+    port: 443,
+    path: '/tasks/list',
+    method: 'GET',
+    headers: {
+        'Authorization': 'Bearer ' + token
+    }
+};
+
+function sendCuckoo(id, md5, name) {
+    var options = {
+        host: ip,
+        port: 8887,
+        path: '/status',
+        method: 'GET',
+        headers: {
+            'id': id
+        }
+    };
+    logEvent('5' + 'Filename: ' + name)
+
+    var request = http.get(options, function(response) {
+        var status = response.headers['status'] == 1 ? "Malware" : "Clean";
+        console.log(status)
+
+        var sql = 'UPDATE files SET status=? WHERE hash=?';
+        dbFiles.run(sql, [status, md5], (err) => { if (err) console.log("dbFiles update error", err) });
+
+        var table = document.getElementById("dt3");
+        for (var i = 0; i < table.rows.length; i++) {
+            var row = table.rows[i];
+            // if (row.cells[4].innerHTML == md5) {
+            //     row.cells[8].innerHTML = status;
+
+            // }
+        }
+
+        //return response.headers['status'] == 1 ? "Malware" : "Clean";
+        //var status = response.headers['status'] == 1 ? "Malware" : "Clean";
+        //var statusSpan = document.createElement("span");
+        //statusSpan.innerHTML = status;
+        //statusSpan.style["margin-left"] = "13px"
+        //console.log(status)
+        // var cell = element.parentNode.parentNode.cells[6];
+        // cell.removeChild(element)
+        // cell.appendChild(statusSpan)
+    }).on('error', function(err) {
+        console.log("req1 error", err)
+    });
+}
+
+function details(element) {
+    var name = element.parentNode.parentNode.cells[0].innerHTML;
+    var mdt = element.parentNode.parentNode.cells[3].innerHTML;
+    const remote = require('electron').remote;
+    const BrowserWindow = remote.BrowserWindow;
+    const win = new BrowserWindow({
+        height: 470,
+        width: 600,
+        title: "Details",
+        webPreferences: {
+            nodeIntegration: true,
+        }
+    });
+    win.loadURL('file://' + __dirname + '/details.html?md5=' + md5);
+    //logEvent('3' + id)
+    logEvent('6' + 'Filename: ' + name)
+}
+
+function viewReport(element) {
+    var id = element.parentNode.parentNode.cells[0].innerHTML;
+    var name = element.parentNode.parentNode.cells[1].innerHTML;
+    const remote = require('electron').remote;
+    const BrowserWindow = remote.BrowserWindow;
+    const win = new BrowserWindow({
+        height: 600,
+        width: 800,
+        title: "Cuckoo report #" + id
+    });
+    win.loadURL('https://' + ip + '/tasks/report/' + id, { extraHeaders: 'Authorization: Bearer ' + token });
+    logEvent('3' + 'Filename: ' + name)
+}
+
+function downloadReport(element) {
+    var downloadDir = process.env.USERPROFILE + "\\Downloads\\cuckooReports\\"
+    if (!fs.existsSync(downloadDir)) {
+        fs.mkdirSync(downloadDir);
+    }
+
+    var id = element.parentNode.parentNode.cells[0].innerHTML;
+    var name = element.parentNode.parentNode.cells[1].innerHTML;
+    var filepath = downloadDir + "report" + id + '.json'
+    var file = fs.createWriteStream(filepath);
+    options.path = '/tasks/report/' + id;
+
+    var request = https.get(options, function(response) {
+        response.pipe(file);
+        file.on('finish', function() {
+            file.close();
+        });
+    }).on('error', function(err) {
+        fs.unlink(dest);
+    });
+    logEvent('4' + 'Filename: ' + name)
+}
+
+let sql = `SELECT * FROM files`;
+dbFiles.all(sql, [], (err, rows) => {
+    if (err) {
+        throw err;
+    }
+    rows.forEach((row) => {
+        dt3.row.add([row['name'], row['status'], row['time'], row['hash'], btnDetails]).draw(false);
+        //dt3.row.add([row['id'], row['status'], row['time'], row['name'], row['hash'], row['packer'], row['verify'], row['signature'], row['cuckoo'], btnView]).draw(false);
+    });
+});
+
+// const req = https.request(options, (res) => {
+//     delete options.format
+//     options.path = '/tasks/list'
+
+//     var output = ''
+//     res.setEncoding('utf8');
+//     res.on('data', (chunk) => {
+//         output += chunk;
+//     });
+
+//     res.on('end', () => {
+//         var obj = JSON.parse(output)['tasks'];
+
+//         obj.forEach(function(sample) {
+//             //console.log([sample["id"], sample["status"], sample["added_on"], sample["target"]])
+//             var filename = sample["target"].split('/').slice(-1)[0]
+//             t.row.add([sample["id"], sample["status"], sample["added_on"], filename, '', '', btnCheck, btnView, btnDownload]).draw(false);
+
+//         });
+//     });
+// });
+
+// req.on('error', (err) => {
+//     showMessage('Cuckoo', 'Error when update table')
+// });
+
+// req.end();
+</script>

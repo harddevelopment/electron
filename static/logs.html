@@ -1,0 +1,76 @@
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css">
+<style type="text/css">
+#dt3 {
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    -o-user-select: none;
+    user-select: none;
+}
+</style>
+<script type="text/javascript">
+function logEvent(message) {
+    var PIPE_PATH = "\\\\.\\pipe\\LoggerPipe";
+    var stream = net.connect(PIPE_PATH);
+    stream.on('error', (error) => {
+        console.log('ignore this:') //??
+        console.log(error)
+    })
+    stream.write("2" + message);
+    stream.push();
+    stream.end();
+}
+
+window.$ = window.jquery = require('../node_modules/jquery');
+//window.dt = require('../node_modules/datatables.net')();
+window.dt = require('datatables.net')();
+
+function showMessage(title, msg) {
+    const { dialog } = require('electron').remote
+    const dialogOptions = { type: 'info', buttons: ['OK'], message: msg, title: 'Cuckoo' }
+    dialog.showMessageBox(dialogOptions, i => console.log(i))
+}
+</script>
+<table id="dt3" class="table compact table-bordered">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Event</th>
+            <th>Source</th>
+            <th>Description</th>
+        </tr>
+    </thead>
+    <tbody>
+    </tbody>
+</table>
+<script type="text/javascript">
+var t = $('#dt3').DataTable();
+
+const path = require('path')
+var dbPath = path.resolve(__dirname, '../../logger/antivairusLogger.db')
+
+
+var currentPath = process.cwd();
+console.log(dbPath)
+
+let dbLogger = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE, (err, rows) => {
+    if (err) {
+        console.error(err);
+    } else {
+        console.log('Connected to the logger database.');
+
+        let sql = `SELECT * FROM Logs`;
+
+        dbLogger.all(sql, [], (err, rows) => {
+            if (err) {
+                throw err;
+            }
+            rows.forEach((row) => {
+                var time = new Date(1970, 0, 1);
+                time.setSeconds(row["_date"]);
+                t.row.add([time.toLocaleString(), row["event"], row["source"], row["description"]]).draw(false);
+            });
+        });
+    }
+});
+</script>
